@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "goldenrun"
+version = "0.1.0"
+description = ""
+authors = ["Remo <remo.yukoff@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.0.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+goldenrun = 'goldenrun.cli:entry_point_main'
