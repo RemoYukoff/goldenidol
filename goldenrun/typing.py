@@ -1,17 +1,7 @@
 import types
 from collections import defaultdict
-from typing import (
-    Any,
-    Callable,
-    DefaultDict,
-    Dict,
-    Iterator,
-    List,
-    Set,
-    Tuple,
-    Type,
-)
-
+from typing import (Any, Callable, DefaultDict, Dict, Iterator, List, Set,
+                    Tuple, Type)
 
 _BUILTIN_CALLABLE_TYPES = (
     types.FunctionType,

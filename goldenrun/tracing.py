@@ -5,12 +5,9 @@ import sys
 from abc import ABCMeta, abstractmethod
 from contextlib import contextmanager
 from types import CodeType, FrameType
-from typing import Any, Callable, Dict, Iterator, Optional, Tuple, cast
+from typing import Any, Callable, Dict, Iterator, Optional, cast
 
 import opcode
-
-from goldenrun.typing import get_type
-from goldenrun.util import get_func_fqname
 
 logger = logging.getLogger(__name__)
 
@@ -40,30 +37,30 @@ class FuncRecord:
         self.func = func
         self.args = args
         self.return_value = return_value
-        # self.return_type = return_type
-        # self.yield_type = yield_type
-
-    @property
-    def module(self):
-        return self.func.__module__
-
-    @property
-    def qualname(self):
-        return self.func.__qualname__
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, self.__class__):
-            return self.__dict__ == other.__dict__
-        return NotImplemented
-
-    def __repr__(self) -> str:
-        return "FuncRecord(%s, %s, %s, %s)" % (
-            self.func,
-            self.args,
-            self.return_value,
-            # self.return_type,
-            # self.yield_type,
+        # Reeplace __main__ with the module name
+        self.module = (
+            self.__file_to_module(self.func.__globals__["__file__"])
+            if self.func.__module__ == "__main__"
+            else self.func.__module__
         )
+        self.qualname = self.func.__qualname__
+
+    def __file_to_module(self, file: str) -> str:
+        return file.replace(".py", "").replace("/", ".")
+
+    # def __eq__(self, other: object) -> bool:
+    #     if isinstance(other, self.__class__):
+    #         return self.__dict__ == other.__dict__
+    #     return NotImplemented
+
+    # def __repr__(self) -> str:
+    #     return "FuncRecord(%s, %s, %s, %s)" % (
+    #         self.func,
+    #         self.args,
+    #         self.return_value,
+    #         # self.return_type,
+    #         # self.yield_type,
+    #     )
 
     def __hash__(self) -> int:
         return hash(
@@ -81,10 +78,6 @@ class FuncRecord:
     #     else:
     #         self.yield_type = cast(type, Union[self.yield_type, typ])
 
-    @property
-    def funcname(self) -> str:
-        return self.func.__module__ + "." + self.func.__qualname__
-
 
 class FuncRecordLogger(metaclass=ABCMeta):
     """Log and store/print records collected by a CallTracer."""
@@ -92,7 +85,6 @@ class FuncRecordLogger(metaclass=ABCMeta):
     @abstractmethod
     def log(self, trace: FuncRecord) -> None:
         """Log a single call trace."""
-        pass
 
     def flush(self) -> None:
         """Flush all logged traces to output / database.
@@ -101,7 +93,6 @@ class FuncRecordLogger(metaclass=ABCMeta):
         simple loggers it may not be necessary to batch-flush traces, and `log`
         can handle everything.
         """
-        pass
 
 
 def get_previous_frames(frame: Optional[FrameType]) -> Iterator[FrameType]:
@@ -210,7 +201,6 @@ class CallTracer:
     def __init__(
         self,
         logger: FuncRecordLogger,
-        max_typed_dict_size: int,
         code_filter: Optional[CodeFilter] = None,
         sample_rate: Optional[int] = None,
     ) -> None:
@@ -219,7 +209,6 @@ class CallTracer:
         self.sample_rate = sample_rate
         self.cache: Dict[CodeType, Optional[Callable[..., Any]]] = {}
         self.should_trace = code_filter
-        self.max_typed_dict_size = max_typed_dict_size
         self.recording = False
 
     def _get_func(self, frame: FrameType) -> Optional[Callable[..., Any]]:
@@ -316,13 +305,12 @@ def record(func):
 @contextmanager
 def trace_calls(
     logger: FuncRecordLogger,
-    max_typed_dict_size: int,
     code_filter: Optional[CodeFilter] = None,
     sample_rate: Optional[int] = None,
 ) -> Iterator[None]:
     """Enable call tracing for a block of code"""
     old_trace = sys.getprofile()
-    sys.setprofile(CallTracer(logger, max_typed_dict_size, code_filter, sample_rate))
+    sys.setprofile(CallTracer(logger, code_filter, sample_rate))
     try:
         yield
     finally:

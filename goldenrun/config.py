@@ -10,9 +10,7 @@ from typing import Iterator, Optional
 
 from goldenrun.db.base import FuncRecordStore, FuncRecordStoreLogger
 from goldenrun.db.sqlite import SQLiteStore
-from goldenrun.tracing import FuncRecordLogger, CodeFilter
-
-# from goldenrun.typing import DEFAULT_REWRITER, NoOpRewriter, TypeRewriter
+from goldenrun.tracing import CodeFilter, FuncRecordLogger
 
 
 class Config(metaclass=ABCMeta):
@@ -51,26 +49,6 @@ class Config(metaclass=ABCMeta):
         returned, all calls will be traced and logged.
         """
         return None
-
-    def sample_rate(self) -> Optional[int]:
-        """Return the sample rate for call tracing.
-
-        By default, all calls will be traced. If an integer sample rate of N is
-        set, 1/N calls will be traced.
-        """
-        return None
-
-    # def type_rewriter(self) -> TypeRewriter:
-    #     """Return the type rewriter for use when generating stubs."""
-    #     return NoOpRewriter()
-
-    def query_limit(self) -> int:
-        """Maximum number of traces to query from the call trace store."""
-        return 2000
-
-    def max_typed_dict_size(self) -> int:
-        """Size up to which a dictionary will be traced as a TypedDict."""
-        return 0
 
 
 lib_paths = {sysconfig.get_path(n) for n in ["stdlib", "purelib", "platlib"]}

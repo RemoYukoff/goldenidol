@@ -1,5 +1,5 @@
 from abc import ABCMeta, abstractmethod
-from typing import Iterable, List, Optional
+from typing import Iterable, List
 
 from goldenrun.tracing import FuncRecord, FuncRecordLogger
 
@@ -10,7 +10,6 @@ class FuncRecordThunk(metaclass=ABCMeta):
     @abstractmethod
     def to_trace(self) -> FuncRecord:
         """Produces the FuncRecord."""
-        pass
 
 
 class FuncRecordStore(metaclass=ABCMeta):
@@ -19,18 +18,16 @@ class FuncRecordStore(metaclass=ABCMeta):
     @abstractmethod
     def add(self, traces: Iterable[FuncRecord]) -> None:
         """Store the supplied call traces in the backing store"""
-        pass
 
     @abstractmethod
-    def filter(
-        self, module: str, qualname_prefix: Optional[str] = None, limit: int = 2000
+    def get_records(
+        self, func_qualname: str, limit: int = 2000
     ) -> List[FuncRecordThunk]:
         """Query the backing store for any traces that match the supplied query.
 
         By returning a list of thunks we let the caller get a partial result in the
         event that decoding one or more call traces fails.
         """
-        pass
 
     @classmethod
     def make_store(cls, connection_string: str) -> "FuncRecordStore":
@@ -59,8 +56,7 @@ class FuncRecordStoreLogger(FuncRecordLogger):
         self.traces: List[FuncRecord] = []
 
     def log(self, trace: FuncRecord) -> None:
-        if not trace.func.__module__ == "__main__":
-            self.traces.append(trace)
+        self.traces.append(trace)
 
     def flush(self) -> None:
         self.store.add(self.traces)

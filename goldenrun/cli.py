@@ -1,20 +1,15 @@
-# PYTHON_ARGCOMPLETE_OK
 import argparse
 import os
 import os.path
 import runpy
 import sys
-from typing import IO, TYPE_CHECKING, List, Optional, Tuple
-from goldenrun.exceptions import GoldenRunError
-
+from typing import IO, List, NoReturn, Optional, Tuple
 
 from goldenrun import trace
 from goldenrun.config import Config
+from goldenrun.db.base import FuncRecordStore
+from goldenrun.exceptions import GoldenRunError
 from goldenrun.util import get_name_in_module
-
-if TYPE_CHECKING:
-    # This is not present in Python 3.6.1, so not safe for runtime import
-    from typing import NoReturn  # noqa
 
 
 def module_path(path: str) -> Tuple[str, Optional[str]]:
@@ -72,11 +67,15 @@ def record_handler(args: argparse.Namespace, stdout: IO[str], stderr: IO[str]) -
         sys.argv = old_argv
 
 
-def update_args_from_config(args: argparse.Namespace) -> None:
-    """Pull values from config for unspecified arguments."""
-    return
-    if args.limit is None:
-        args.limit = args.config.query_limit()
+def replay_handler(args: argparse.Namespace, stdout: IO[str], stderr: IO[str]) -> None:
+    trace_store: FuncRecordStore = args.config.trace_store()
+    for arg in args.functions:
+        records = trace_store.get_records(arg)
+        # grab function
+        # load current function in memory
+        # mock related functions
+        # run function with all existing paramenters
+        # assert output is the same
 
 
 def main(argv: List[str], stdout: IO[str], stderr: IO[str]) -> int:
@@ -114,9 +113,19 @@ def main(argv: List[str], stdout: IO[str], stderr: IO[str]) -> int:
     )
     record_parser.set_defaults(handler=record_handler)
 
+    replay_parser = subparsers.add_parser(
+        "replay",
+        help="Replay a recorded Python function",
+        description="Replay a recorded Python function",
+    )
+    replay_parser.add_argument(
+        "functions",
+        nargs=argparse.REMAINDER,
+    )
+    replay_parser.set_defaults(handler=replay_handler)
+
     args = parser.parse_args(argv)
     args.config = get_goldenrun_config(args.config)
-    update_args_from_config(args)
 
     handler = getattr(args, "handler", None)
     if handler is None:

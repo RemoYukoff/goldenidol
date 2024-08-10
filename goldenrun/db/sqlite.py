@@ -1,111 +1,104 @@
-import datetime
 import logging
 import pickle
 import sqlite3
-from typing import Iterable, List, Optional, Tuple, Union
+from datetime import datetime
+from typing import Iterable, List, Tuple, Union
 
 from goldenrun.db.base import FuncRecordStore, FuncRecordThunk
-from goldenrun.encoding import FuncRecordRow
-
-# from goldenrun.encoding import FuncRecordRow, serialize_traces
 from goldenrun.tracing import FuncRecord
 
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_TABLE = "goldenrun_func_record"
-
-
-def create_call_trace_table(
-    conn: sqlite3.Connection, table: str = DEFAULT_TABLE
-) -> None:
-    queries = [
-        """
-        CREATE TABLE IF NOT EXISTS {table} (
-          created_at  TEXT,
+def create_func_table(conn: sqlite3.Connection) -> None:
+    query = """
+        CREATE TABLE IF NOT EXISTS goldenrun_func (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
           module      TEXT,
           qualname    TEXT,
-          serialized_args BLOB,
-          serialized_return BLOB,
-          record BOOL);
-        """,
-    ]
+          record      BOOL);
+        """
 
     with conn:
-        for query in queries:
-            conn.execute(query.format(table=table))
+        conn.execute(query)
+
+
+def create_record_table(conn: sqlite3.Connection) -> None:
+    query = """
+        CREATE TABLE IF NOT EXISTS goldenrun_record (
+          func_id           INTEGER,
+          created_at        TEXT,
+          serialized_args   BLOB,
+          serialized_return BLOB,
+          FOREIGN KEY (func_id) REFERENCES goldenrun_func(id));
+        """
+
+    with conn:
+        conn.execute(query)
 
 
 QueryValue = Union[str, int]
 ParameterizedQuery = Tuple[str, List[QueryValue]]
 
 
-def make_query(
-    table: str, module: str, qualname: Optional[str], limit: int
-) -> ParameterizedQuery:
-    raw_query = """
-    SELECT
-        module, qualname, serialized_args, serialized_return
-    FROM {table}
-    WHERE
-        module == ?
-    """.format(
-        table=table
-    )
-    values: List[QueryValue] = [module]
-    if qualname is not None:
-        raw_query += " AND qualname LIKE ? || '%'"
-        values.append(qualname)
-    raw_query += """
-    GROUP BY
-        module, qualname, arg_types, return_type, yield_type
-    ORDER BY date(created_at) DESC
-    LIMIT ?
-    """
-    values.append(limit)
-    return raw_query, values
-
-
 class SQLiteStore(FuncRecordStore):
-    def __init__(self, conn: sqlite3.Connection, table: str = DEFAULT_TABLE) -> None:
+    def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
-        self.table = table
 
     @classmethod
     def make_store(cls, connection_string: str) -> "FuncRecordStore":
         conn = sqlite3.connect(connection_string)
-        create_call_trace_table(conn)
+        create_func_table(conn)
+        create_record_table(conn)
         return cls(conn)
 
-    def add(self, traces: Iterable[FuncRecord]) -> None:
-        values = []
-        for trace in traces:
-            values.append(
-                (
-                    datetime.datetime.now(),
-                    trace.module,
-                    trace.qualname,
-                    pickle.dumps(trace.args),
-                    pickle.dumps(trace.return_value),
-                )
-            )
-        with self.conn:
-            self.conn.executemany(
-                "INSERT INTO {table} VALUES (?, ?, ?, ?, ?, ?)".format(
-                    table=self.table
-                ),
-                values,
-            )
+    def _get_or_insert_func(self, module: str, qualname: str):
+        get_func_query = "SELECT id FROM goldenrun_func WHERE module=? AND qualname=?"
+        result = self.conn.execute(get_func_query, (module, qualname)).fetchone()
 
-    def filter(
-        self, module: str, qualname_prefix: Optional[str] = None, limit: int = 2000
+        if result:
+            return result[0]
+        else:
+            insert_func_query = (
+                "INSERT INTO goldenrun_func (module, qualname) VALUES (?, ?)"
+            )
+            self.conn.execute(insert_func_query, (module, qualname))
+            return self.conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    def add(self, traces: Iterable[FuncRecord]) -> None:
+        with self.conn as conn:
+            for trace in traces:
+                func_id = self._get_or_insert_func(trace.module, trace.qualname)
+                insert_record_query = """
+                        INSERT INTO goldenrun_record (func_id, created_at, serialized_args, serialized_return)
+                        VALUES (?, ?, ?, ?)
+                    """
+                conn.execute(
+                    insert_record_query,
+                    (
+                        func_id,
+                        datetime.now(),
+                        pickle.dumps(trace.args),
+                        pickle.dumps(trace.return_value),
+                    ),
+                )
+
+    def get_records(
+        self, func_qualname: str, limit: int = 2000
     ) -> List[FuncRecordThunk]:
-        ...
-        # sql_query, values = make_query(self.table, module, qualname_prefix, limit)
-        # with self.conn:
-        #     cur = self.conn.cursor()
-        #     cur.execute(sql_query, values)
-        #     return [FuncRecordRow(*row) for row in cur.fetchall()]
+        get_func_query = """
+            SELECT id
+            FROM goldenrun_func
+            WHERE qualname = ?
+        """
+        get_records_query = """
+            SELECT created_at, serialized_args, serialized_return
+            FROM goldenrun_record
+            WHERE func_id = ?
+        """
+        with self.conn as conn:
+            _id = conn.execute(get_func_query, (func_qualname,)).fetchone()[0]
+            return conn.execute(get_records_query, (_id,)).fetchall()
 
     def list_modules(self) -> List[str]:
         ...

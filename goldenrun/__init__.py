@@ -15,6 +15,4 @@ def trace(config: Optional[Config] = None) -> ContextManager[None]:
     return trace_calls(
         logger=config.trace_logger(),
         code_filter=config.code_filter(),
-        sample_rate=config.sample_rate(),
-        max_typed_dict_size=config.max_typed_dict_size(),
     )

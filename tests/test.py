@@ -10,13 +10,13 @@ class TestClass:
         self.arg3 = arg1 + arg2
 
 
+@record
 def function_a(arg1, arg2):
     print(f"arg1:{arg1} function_a")
     testclass = function_b(arg1, arg2)
     print(f"arg4:{testclass.arg3} function_a")
 
 
-@record
 def function_b(arg2, arg3):
     print(f"arg2:{arg2} function_b")
     print(f"arg3:{arg3} function_b")
